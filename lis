@@ -1,0 +1,1326 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>瑋瑋菱菱去TOKYO</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    body, html { margin: 0; padding: 0; height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; overflow: hidden; background-color: #f7f9fc; }
+    .map-bg { position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: 1; background-color: #e0f0ff; }
+    #leaflet-map, #google-iframe, #subway-map-container { width: 100%; height: 100%; position: absolute; top: 0; left: 0; border: none; }
+    
+    #subway-map-container { overflow: auto; background: #fff; text-align: center; scroll-behavior: smooth; display: none;}
+    #subway-map-wrapper { position: relative; display: inline-block; margin: 0 auto; transition: transform 0.2s ease;}
+    #subway-map-wrapper img { height: 1600px; max-width: none; cursor: grab; padding: 40px; display: block; transition: height 0.3s ease; }
+    #subway-svg-overlay { position: absolute; top: 40px; left: 40px; width: calc(100% - 80px); height: calc(100% - 80px); pointer-events: none; z-index: 50; }
+    .zoom-controls { display: none; position: fixed; right: 20px; bottom: 80px; flex-direction: column; gap: 10px; z-index: 2000; }
+    .zoom-controls button { width: 44px; height: 44px; border-radius: 50%; background: #fff; border: 2px solid #1a73e8; color: #1a73e8; font-size: 20px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.2); }
+
+    .action-float-btn { position: absolute; right: 20px; z-index: 2000; padding: 10px 16px; border-radius: 30px; box-shadow: 0 4px 15px rgba(0,0,0,0.15); font-weight: bold; font-size: 14px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; border: none; }
+    .action-float-btn:hover { transform: scale(1.05); }
+    #map-mode-toggle { top: 20px; background: #fff; color: #1a73e8; border: 2px solid #1a73e8; }
+    #search-supermarket-btn { top: 75px; background: #34a853; color: white; }
+    #quick-add-btn { top: 130px; background: #ea4335; color: white; }
+
+    .itinerary-panel { position: absolute; top: 20px; right: 20px; bottom: 20px; width: 460px; background: white; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); z-index: 1000; display: flex; flex-direction: column; overflow: hidden; }
+    .panel-scroll-area { flex: 1; overflow-y: auto; padding: 25px; box-sizing: border-box; }
+
+    .day-nav { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid #eee; }
+    .day-btn { padding: 8px 14px; border: none; border-radius: 20px; background: #f0f4f8; cursor: pointer; font-weight: bold; font-size: 13px; color: #444; transition: all 0.2s ease; }
+    .day-btn:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+    .day-btn.active { background: #1a1a1a; color: white; box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+    .transport-btn { background: #e8f0fe; color: #1967d2; } .transport-btn.active { background: #1967d2; color: white;}
+    .hotel-btn { background: #fef7e0; color: #ea8600; } .hotel-btn.active { background: #ea8600; color: white;}
+    .subway-btn { background: #f3e8ff; color: #8e24aa; } .subway-btn.active { background: #8e24aa; color: white;}
+
+    .mobile-toggle { display: none; background: #1a73e8; color: #fff; text-align: center; padding: 12px; font-weight: bold; cursor: pointer; letter-spacing: 1px; font-size: 15px; box-shadow: 0 2px 10px rgba(26,115,232,0.3); }
+
+    .day-content { display: none; animation: fadeIn 0.3s ease-out; }
+    .day-content.active { display: block; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
+    .day-subtitle { color: #888; font-size: 13px; margin: 0; letter-spacing: 1.5px; font-weight: bold; }
+    .panel-header h2 { margin: 8px 0 15px; font-size: 26px; color: #111; }
+    .time-section { margin-top: 20px; }
+    .time-section h3 { color: #555; font-size: 16px; margin-bottom: 15px; border-bottom: 2px solid #f0f0f0; padding-bottom: 10px; }
+    
+    .event-card { display: flex; gap: 15px; margin-bottom: 20px; padding: 15px; position: relative; border-radius: 16px; background: #fff; border: 1px solid transparent; transition: all 0.2s ease; cursor: pointer; text-decoration: none; color: inherit; box-shadow: 0 2px 8px rgba(0,0,0,0.04); }
+    .event-card:hover { background: #fafcff; border: 1px solid #d2e3fc; transform: translateY(-4px); box-shadow: 0 8px 24px rgba(25,103,210,0.1); }
+    
+    .card-pin-btn { position: absolute; top: 12px; right: 12px; padding: 0; background: #fff; border: 1px solid #ddd; border-radius: 50%; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; font-size: 16px; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.15); transition: all 0.2s ease; z-index: 10; }
+    .card-pin-btn:hover { background: #fef7e0; transform: scale(1.1); border-color: #fbbc04;}
+
+    .add-custom-btn { width: 100%; padding: 12px; border: 2px dashed #1a73e8; background: #e8f0fe; color: #1a73e8; font-weight: bold; border-radius: 12px; cursor: pointer; margin-top: 10px; transition: 0.2s; font-size: 14px; }
+    .add-custom-btn:hover { background: #d2e3fc; }
+
+    .chicken-box, .fav-box { background: #fffdf0; border: 2px dashed #f5b041; border-radius: 16px; padding: 15px; margin-bottom: 20px; box-shadow: 0 4px 12px rgba(245, 176, 65, 0.15); }
+    .fav-box { background: #fffaf0; border-color: #e74c3c; box-shadow: 0 4px 12px rgba(231, 76, 60, 0.15); }
+    .chicken-box h3 { color: #d35400; margin-top: 0; border-bottom: 2px solid #fad7a1; padding-bottom: 8px; font-size: 16px;}
+    .fav-box h3 { color: #e74c3c; margin-top: 0; border-bottom: 2px solid #fadbd8; padding-bottom: 8px; font-size: 16px;}
+    .chicken-box .event-card, .fav-box .event-card { border: 1px solid #fdebd0; box-shadow: none; margin-bottom: 10px; padding: 12px;}
+    .fav-box .event-card { border-color: #fadbd8; }
+    .chicken-box .event-card:hover { background: #fff; border-color: #f39c12; }
+    .fav-box .event-card:hover { background: #fff; border-color: #e74c3c; }
+
+    .event-img { width: 72px; height: 72px; border-radius: 14px; object-fit: cover; flex-shrink: 0; background-color: #f0f4f8; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    .event-info { display: flex; flex-direction: column; justify-content: center; flex-grow: 1; padding-right: 30px;}
+    .time { font-size: 13px; color: #1967d2; font-weight: 800; margin-bottom: 6px; }
+    .event-info h4 { margin: 0 0 8px 0; font-size: 17px; color: #222; font-weight: 700; line-height: 1.3;}
+    .event-info p { margin: 0; font-size: 14px; color: #555; line-height: 1.5; }
+    
+    .transit-guide { margin-top: 10px; padding: 10px 12px; background-color: #f8f9fa; border-left: 4px solid #1a73e8; border-radius: 6px; font-size: 12.5px; color: #444; line-height: 1.6; }
+    .transit-guide span.price { color: #d93025; font-weight: bold; }
+    .transit-guide strong { color: #1a73e8; }
+
+    .map-pin-container { background: transparent; border: none; }
+    .pin-marker { position: relative; width: 32px; height: 42px; cursor: pointer; filter: drop-shadow(0px 3px 4px rgba(0,0,0,0.3)); }
+    .pin-marker svg { width: 100%; height: 100%; }
+    .pin-text { position: absolute; top: 6px; width: 100%; text-align: center; color: white; font-weight: bold; font-size: 14px; font-family: Arial, sans-serif; }
+    .bouncing { animation: bounce 0.4s infinite alternate; }
+    @keyframes bounce { 0% { transform: translateY(0); } 100% { transform: translateY(-12px); filter: drop-shadow(0px 10px 6px rgba(0,0,0,0.2));} }
+    .bouncing .pin-marker svg path { fill: #c5221f; }
+
+    .subway-pin { position: absolute; transform: translate(-50%, -100%); width: 36px; height: 46px; z-index: 100; }
+    .subway-pin-text { position: absolute; top: -30px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); color: #fff; padding: 4px 8px; border-radius: 6px; white-space: nowrap; font-size: 14px; font-weight: bold; pointer-events: none; }
+    .transfer-ring { position: absolute; width: 60px; height: 60px; border: 5px solid #e74c3c; border-radius: 50%; transform: translate(-50%, -50%); z-index: 90; animation: pulse-ring 1.5s infinite ease-out; pointer-events: none; }
+    @keyframes pulse-ring { 0% { transform: translate(-50%, -50%) scale(0.4); opacity: 1; border-width: 6px;} 100% { transform: translate(-50%, -50%) scale(1.8); opacity: 0; border-width: 1px;} }
+
+    .transfer-sim { display: flex; flex-direction: column; gap: 15px; margin-top: 15px;}
+    .transfer-path { background: #f8f9fa; border: 2px solid #e9ecef; border-radius: 12px; padding: 15px; transition: all 0.3s; position: relative; overflow: hidden; }
+    .transfer-path:hover { background: #fffaf0; border-color: #8e24aa; box-shadow: 0 4px 15px rgba(142,36,170,0.15);}
+    .t-header { display: flex; align-items: center; flex-wrap: wrap; font-weight: bold; color: #333; gap: 8px;}
+    .t-line { padding: 4px 8px; border-radius: 6px; color: white; font-size: 12px; font-weight: bold; white-space: nowrap;}
+    .line-z { background: #8f76d6; } .line-c { background: #00bb85; } .line-g { background: #f39700; }
+    .line-h { background: #b5b5ac; } .line-jr {background: #4caf50; } .line-od {background: #0071cd; }
+    .t-arrow { color: #888; font-size: 14px; }
+    .t-details { max-height: 0; opacity: 0; transition: all 0.4s ease; font-size: 13px; color: #555; margin-top: 0; line-height: 1.6; }
+    .transfer-path:hover .t-details { max-height: 350px; opacity: 1; margin-top: 12px; padding-top: 12px; border-top: 1px dashed #ddd; }
+    .t-details strong { color: #8e24aa; }
+    .action-buttons { margin-top: 12px; display: flex; gap: 10px; }
+    .action-btn { flex: 1; padding: 10px 8px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.2s; font-size: 13px; }
+    .action-btn.map-btn { background: #f3e8ff; color: #8e24aa; border: 1px solid #e1bee7;}
+    .action-btn.map-btn:hover { background: #e1bee7; }
+    .action-btn.nav-btn { background: #e6f4ea; color: #137333; border: 1px solid #c8e6c9;}
+    .action-btn.nav-btn:hover { background: #ceead6; }
+
+    #custom-bottom-sheet { position: fixed; bottom: -120%; left: 0; width: 100%; max-width: 460px; margin: 0 auto; background: white; border-radius: 24px 24px 0 0; box-shadow: 0 -5px 25px rgba(0,0,0,0.25); z-index: 3000; transition: bottom 0.4s cubic-bezier(0.1, 0.8, 0.3, 1); display: flex; flex-direction: column; }
+    #custom-bottom-sheet.open { bottom: 0; }
+    .bs-header-img { width: 100%; height: 220px; object-fit: cover; border-radius: 20px 20px 0 0; }
+    .bs-drag-handle { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); width: 40px; height: 5px; background: rgba(255,255,255,0.9); border-radius: 3px; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+    .bs-content { padding: 15px 20px; overflow-y: auto; max-height: 50vh; }
+    .bs-title { font-size: 24px; margin: 0 0 4px 0; color: #202124; font-weight: bold; line-height:1.2;}
+    .bs-subtitle { font-size: 14px; color: #5f6368; margin: 0 0 10px 0; }
+    .bs-rating-row { display: flex; align-items: center; gap: 6px; font-size: 14px; color: #70757a; margin-bottom: 20px; }
+    .bs-rating-score { color: #3c4043; font-weight: bold; }
+    .bs-stars { color: #fbbc04; font-size: 16px; letter-spacing: -2px;}
+    .bs-tabs { display: flex; gap: 20px; border-bottom: 1px solid #e8eaed; padding-bottom: 10px; margin-bottom: 15px; }
+    .bs-tab { color: #1a73e8; font-weight: bold; border-bottom: 3px solid #1a73e8; padding-bottom: 10px; margin-bottom: -11px; font-size: 14px; }
+    .bs-tab.inactive { color: #5f6368; border-bottom: none; font-weight: normal; }
+    .bs-actions { display: flex; justify-content: space-between; margin-bottom: 20px; border-bottom: 1px solid #e8eaed; padding-bottom: 20px;}
+    .bs-action-btn { display: flex; flex-direction: column; align-items: center; gap: 6px; background: none; border: none; cursor: pointer; text-decoration: none; width: 65px;}
+    .bs-action-icon { width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 20px;}
+    .bs-action-icon.primary { background: #1a73e8; color: white;}
+    .bs-action-icon.secondary { border: 1px solid #dadce0; color: #1a73e8; background: white; transition: 0.2s;}
+    .bs-action-icon.secondary:hover { background: #e8f0fe; }
+    .bs-action-text { font-size: 12px; color: #1a73e8; font-weight: bold; text-align: center; white-space: nowrap;}
+    .bs-address-row { display: flex; gap: 15px; align-items: flex-start; padding-top: 5px; }
+    .bs-address-icon { color: #1a73e8; font-size: 20px; margin-top: 2px;}
+    .bs-address-text { font-size: 14px; color: #3c4043; line-height: 1.5; }
+    .bs-close-btn { position: absolute; top: 12px; right: 12px; width: 32px; height: 32px; background: rgba(0,0,0,0.6); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; cursor: pointer; border: none; font-size: 14px;}
+
+    @media (max-width: 768px) {
+      .mobile-toggle { display: block; }
+      .action-float-btn { padding: 8px 14px; font-size: 13px; right: 15px; }
+      #map-mode-toggle { top: 20px; }
+      #search-supermarket-btn { top: 65px; }
+      #quick-add-btn { top: 110px; }
+      
+      .itinerary-panel { top: auto; right: 0; left: 0; bottom: 0; width: 100%; height: 56vh; border-radius: 20px 20px 0 0; padding: 0; box-shadow: 0 -4px 20px rgba(0,0,0,0.2); transition: transform 0.4s cubic-bezier(0.1, 0.8, 0.3, 1); }
+      .itinerary-panel.collapsed { transform: translateY(calc(100% - 46px)); }
+      .itinerary-panel.collapsed .mobile-toggle { background: #ea4335; }
+      .event-card { flex-direction: column; gap: 10px; padding: 12px; }
+      .event-img { width: 100%; height: 140px; border-radius: 12px; }
+      .panel-header h2 { font-size: 22px; }
+      .transfer-path .t-details { max-height: 400px; opacity: 1; margin-top: 12px; padding-top: 12px; border-top: 1px dashed #ddd; }
+      .event-info { padding-right: 0; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 🚀 雙地圖引擎 🚀 -->
+  <div class="map-bg">
+    <!-- 1. 互動式 Leaflet 地圖 (單指滑動預設) -->
+    <div id="leaflet-map"></div>
+    
+    <!-- 2. 原生 Google Maps iframe (探索周邊用，需雙指) -->
+    <iframe id="google-iframe" src="about:blank" style="display:none;" allowfullscreen="" loading="lazy"></iframe>
+
+    <!-- 3. 轉乘圖解專用 (4K 超高解析地鐵圖) -->
+    <div id="subway-map-container">
+      <div id="subway-map-wrapper">
+        <img src="https://lh3.googleusercontent.com/d/1cw8H4rdgx-71sv6hvEsRROXjEDQXRqkc" alt="東京地鐵路線圖" draggable="false">
+        <svg id="subway-svg-overlay"></svg>
+      </div>
+    </div>
+    
+    <div class="zoom-controls" id="zoom-controls">
+      <button onclick="zoomSubway(1.2)">➕</button>
+      <button onclick="zoomSubway(0.8)">➖</button>
+    </div>
+    
+    <button id="map-mode-toggle" class="action-float-btn" onclick="toggleMapMode()">🔍 切換 Google 探索地圖</button>
+    <button id="search-supermarket-btn" class="action-float-btn" onclick="searchNearby('超市')">🛒 找周邊超市</button>
+    <button id="quick-add-btn" class="action-float-btn" onclick="quickAddPlace()">➕ 釘選新地點</button>
+  </div>
+
+  <!-- ✨ 復刻版 Google Maps 底部資訊卡 ✨ -->
+  <div id="custom-bottom-sheet">
+    <div style="position: relative;">
+      <img id="bs-img" src="" alt="cover" class="bs-header-img">
+      <div class="bs-drag-handle"></div>
+      <button class="bs-close-btn" onclick="closeBottomSheet()">✕</button>
+    </div>
+    <div class="bs-content">
+      <h2 class="bs-title" id="bs-title">店家名稱</h2>
+      <p class="bs-subtitle" id="bs-subtitle">日本〒130-0022 Tokyo...</p>
+      <div class="bs-rating-row">
+        <span class="bs-rating-score" id="bs-rating-score">4.2</span>
+        <span class="bs-stars">★★★★<span style="color:#e8eaed">★</span></span>
+        <span id="bs-reviews">(1,280)</span>
+      </div>
+      
+      <div class="bs-tabs">
+        <div class="bs-tab">總覽</div><div class="bs-tab inactive">菜單</div><div class="bs-tab inactive">評論</div><div class="bs-tab inactive">簡介</div>
+      </div>
+
+      <div class="bs-actions">
+        <a href="#" id="bs-nav-link" target="_blank" class="bs-action-btn">
+          <div class="bs-action-icon primary"><svg width="24" height="24" viewBox="0 0 24 24" fill="white"><path d="M13.5 21L12 19.5L16.5 15H5v-4h2v2h9.5l-4.5-4.5L13.5 7l7 7l-7 7z"/></svg></div>
+          <span class="bs-action-text" style="font-weight:bold;">規劃路線</span>
+        </a>
+        <button class="bs-action-btn" onclick="saveToFavoritesFromBottomSheet()">
+          <div class="bs-action-icon secondary" id="fav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M17 3H7c-1.1 0-2 .9-2 2v16l7-3l7 3V5c0-1.1-.9-2-2-2z"/></svg></div>
+          <span class="bs-action-text" id="fav-text" style="color:#5f6368;">儲存行程</span>
+        </button>
+        <button class="bs-action-btn" onclick="exploreNearby()">
+          <div class="bs-action-icon secondary"><svg width="20" height="20" viewBox="0 0 24 24" fill="#1a73e8"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg></div>
+          <span class="bs-action-text" style="color:#5f6368;">探索周邊</span>
+        </button>
+        <button class="bs-action-btn" onclick="openCurrentGMaps()">
+          <div class="bs-action-icon secondary"><svg width="20" height="20" viewBox="0 0 24 24" fill="#1a73e8"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92s2.92-1.31 2.92-2.92-1.31-2.92-2.92-2.92z"/></svg></div>
+          <span class="bs-action-text" style="color:#5f6368;">在 Map 開啟</span>
+        </button>
+      </div>
+      <div class="bs-address-row">
+        <div class="bs-address-icon">📍</div>
+        <div class="bs-address-text" id="bs-desc">店家詳細介紹文字會在這裡...</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="itinerary-panel" id="main-panel">
+    <div class="mobile-toggle" onclick="togglePanel()">🔽 收起行程表，查看全螢幕地圖</div>
+    <div class="panel-scroll-area">
+      <div class="day-nav">
+        <button class="day-btn active" data-target="day1-content">Day 1</button>
+        <button class="day-btn" data-target="day2-content">Day 2</button>
+        <button class="day-btn" data-target="day3-content">Day 3</button>
+        <button class="day-btn" data-target="day4-content">Day 4</button>
+        <button class="day-btn" data-target="day5-content">Day 5</button>
+        <button class="day-btn subway-btn" data-target="subway-content">🚇 轉乘圖解</button>
+        <button class="day-btn transport-btn" data-target="transport-content">預算與票券</button>
+        <button class="day-btn hotel-btn" data-target="hotel-content">飯店周邊</button>
+      </div>
+
+      <!-- 🚇 轉乘互動教學面板 -->
+      <div id="subway-content" class="day-content">
+        <div class="panel-header">
+          <p class="day-subtitle">TRANSFER SIMULATOR</p><h2>東京地鐵轉乘指南</h2>
+          <p class="desc">沿著真實地鐵圖畫出的精準動線！點擊「🗺️ 在地鐵圖看動線」，地圖會為您畫出虛線並在換車處打上 <strong style="color:#e74c3c;">動態紅色轉乘圈圈</strong>！</p>
+        </div>
+
+        <div class="transfer-sim">
+          <!-- 路線 1: 錦糸町 ➡ 豪德寺 -->
+          <div class="transfer-path" data-subway-paths='[{"color":"#8f76d6", "points":[{"x":71.5,"y":42.5}, {"x":55,"y":42.5}, {"x":53,"y":46.5}, {"x":43.5,"y":46.5}, {"x":40,"y":50}, {"x":37.5,"y":50}, {"x":34.5,"y":55}, {"x":31.5,"y":55}, {"x":25,"y":68}], "name":"半藏門線(直通田園都市線)"}]' data-subway-rings='[{"x":25,"y":68,"name":"換線：三軒茶屋站"}]' data-subway-ends='[{"x":71.5,"y":42.5,"name":"起點：錦糸町站"}, {"x":20,"y":68,"name":"終點：豪德寺方向"}]'>
+            <div class="t-header">錦糸町 <span class="t-arrow">➡</span> <span class="t-line line-z">Z 半藏門線</span> <span class="t-arrow">➡</span> 三軒茶屋 <span class="t-arrow">➡</span> <span class="t-line line-od">世田谷線</span> <span class="t-arrow">➡</span> 豪德寺</div>
+            <div class="t-details">
+              <strong>💡 轉乘技巧 (Day 3 早上)：</strong><br>錦糸町搭【Z 半藏門線】(紫線) 直通運轉【東急田園都市線】。您<strong>完全不用下車</strong>就可以一路坐到「三軒茶屋站」。出站後依循『世田谷線』地上指標，換乘路面電車即可！
+              <div class="action-buttons"><button class="action-btn map-btn" onclick="showSubwayTransfer(this.closest('.transfer-path')); event.stopPropagation();">🗺️ 在地鐵圖看動線</button><button class="action-btn nav-btn" onclick="window.open('https://www.google.com/maps/dir/?api=1&origin=錦糸町駅&destination=宮の坂駅&waypoints=三軒茶屋駅&travelmode=transit', '_blank'); event.stopPropagation();">🧭 Google 轉乘導航</button></div>
+            </div>
+          </div>
+
+          <!-- 路線 2: 錦糸町 ➡ 明治神宮前 -->
+          <div class="transfer-path" data-subway-paths='[{"color":"#8f76d6", "points":[{"x":71.5,"y":42.5}, {"x":55,"y":42.5}, {"x":53,"y":46.5}, {"x":43.5,"y":46.5}, {"x":40,"y":50}, {"x":37.5,"y":50}, {"x":34.5,"y":55}, {"x":33,"y":55}], "name":"半藏門線"},{"color":"#00bb85", "points":[{"x":33,"y":55}, {"x":32.5,"y":54.5}], "name":"千代田線"}]' data-subway-rings='[{"x":33,"y":55,"name":"換線：表參道站"}]' data-subway-ends='[{"x":71.5,"y":42.5,"name":"起點：錦糸町站"}, {"x":32.5,"y":54.5,"name":"終點：明治神宮前"}]'>
+            <div class="t-header">錦糸町 <span class="t-arrow">➡</span> <span class="t-line line-z">Z 半藏門線</span> <span class="t-arrow">➡</span> 表參道 <span class="t-arrow">➡</span> <span class="t-line line-c">C 千代田線</span> <span class="t-arrow">➡</span> 明治神宮前</div>
+            <div class="t-details">
+              <strong>💡 轉乘技巧 (Day 4 上午)：</strong><br>從錦糸町搭半藏門線抵達「表參道站」後，請認明<strong>綠色指標 (C 千代田線)</strong>。不需要出剪票閘門，只要在站內往下走一層樓梯，就可以直接走到千代田線的月台！
+              <div class="action-buttons"><button class="action-btn map-btn" onclick="showSubwayTransfer(this.closest('.transfer-path')); event.stopPropagation();">🗺️ 在地鐵圖看動線</button><button class="action-btn nav-btn" onclick="window.open('https://www.google.com/maps/dir/?api=1&origin=錦糸町駅&destination=明治神宮前駅&waypoints=表參道駅&travelmode=transit', '_blank'); event.stopPropagation();">🧭 Google 轉乘導航</button></div>
+            </div>
+          </div>
+
+          <!-- 路線 3: 明治神宮前 ➡ 築地 -->
+          <div class="transfer-path" data-subway-paths='[{"color":"#00bb85", "points":[{"x":32.5,"y":54.5}, {"x":41,"y":54.5}, {"x":50.5,"y":58}], "name":"千代田線"},{"color":"#b5b5ac", "points":[{"x":50.5,"y":58}, {"x":57.5,"y":58}, {"x":61.5,"y":65.5}], "name":"日比谷線"}]' data-subway-rings='[{"x":50.5,"y":58,"name":"換線：日比谷站"}]' data-subway-ends='[{"x":32.5,"y":54.5,"name":"起點：明治神宮前"}, {"x":61.5,"y":65.5,"name":"終點：築地站"}]'>
+            <div class="t-header">明治神宮前 <span class="t-arrow">➡</span> <span class="t-line line-c">C 千代田線</span> <span class="t-arrow">➡</span> 日比谷 <span class="t-arrow">➡</span> <span class="t-line line-h">H 日比谷線</span> <span class="t-arrow">➡</span> 築地</div>
+            <div class="t-details">
+              <strong>💡 轉乘技巧 (Day 4 中午)：</strong><br>搭千代田線到「日比谷站」，沿著<strong>灰色指標 (H 日比谷線)</strong> 換線。這段全程都在 Tokyo Metro 系統內，只要拿著 24H 票券，中途不用刷卡出站！
+              <div class="action-buttons"><button class="action-btn map-btn" onclick="showSubwayTransfer(this.closest('.transfer-path')); event.stopPropagation();">🗺️ 在地鐵圖看動線</button><button class="action-btn nav-btn" onclick="window.open('https://www.google.com/maps/dir/?api=1&origin=明治神宮前駅&destination=築地駅&waypoints=日比谷駅&travelmode=transit', '_blank'); event.stopPropagation();">🧭 Google 轉乘導航</button></div>
+            </div>
+          </div>
+          
+          <!-- 路線 4: 淺草 ➡ 龜有 -->
+          <div class="transfer-path" data-subway-paths='[{"color":"#f39700", "points":[{"x":70,"y":20}, {"x":60.5,"y":20}], "name":"銀座線"},{"color":"#4caf50", "points":[{"x":60.5,"y":20}, {"x":80,"y":8}], "name":"JR常磐線(直通千代田線)"}]' data-subway-rings='[{"x":60.5,"y":20,"name":"換線：上野站"}]' data-subway-ends='[{"x":70,"y":20,"name":"起點：淺草站"}, {"x":80,"y":8,"name":"終點：龜有方向"}]'>
+            <div class="t-header">淺草 <span class="t-arrow">➡</span> <span class="t-line line-g">G 銀座線</span> <span class="t-arrow">➡</span> 上野 <span class="t-arrow">➡</span> <span class="t-line line-jr">JR 常磐線</span> <span class="t-arrow">➡</span> 龜有</div>
+            <div class="t-details">
+              <strong>💡 轉乘技巧 (Day 4 傍晚)：</strong><br>淺草搭【G 銀座線】至「上野」 ➡ <strong>必須刷卡出地鐵站</strong>，改走到地上的 JR 上野站入站 ➡ 搭乘【JR常磐線】至「龜有站」。(此段 JR 無法使用地鐵券，需刷 Suica)
+              <div class="action-buttons"><button class="action-btn map-btn" onclick="showSubwayTransfer(this.closest('.transfer-path')); event.stopPropagation();">🗺️ 在地鐵圖看動線</button><button class="action-btn nav-btn" onclick="window.open('https://www.google.com/maps/dir/?api=1&origin=淺草駅&destination=亀有駅&waypoints=上野駅&travelmode=transit', '_blank'); event.stopPropagation();">🧭 Google 轉乘導航</button></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 🏨 飯店周邊與最愛清單 -->
+      <div id="hotel-content" class="day-content">
+        <div class="panel-header">
+          <p class="day-subtitle">HOTEL NEIGHBORHOOD & FAVORITES</p><h2>飯店周邊 & 我的最愛</h2>
+          <p class="desc">🌟 點擊右上角「切換 Google 探索地圖」解鎖真實互動地圖！點擊下方景點卡片的「⭐」按鈕，它們會永久保存在這裡的最上方喔！</p>
+        </div>
+
+        <div class="fav-box" id="favorites-section">
+          <h3>⭐ 我的最愛清單</h3>
+          <div id="fav-list"></div>
+        </div>
+
+        <div class="chicken-box">
+          <h3>🍗 錦糸町炸雞特區</h3>
+          <div class="event-card" data-lat="35.6952" data-lng="139.8140" data-query="から揚げの天才 錦糸町店">
+            <img class="event-img" src="https://lh3.googleusercontent.com/d/1SNi_kKMmHvuRX0I5unqTEr-yFYocFNSF" alt="天才炸雞">
+            <div class="event-info">
+              <span class="time">外帶大份量推薦</span><h4>から揚げの天才 錦糸町店</h4>
+              <div class="transit-guide">必點「Family Pack (家庭盒)」，裡面塞滿超大塊唐揚雞，買回飯店當宵夜配啤酒最爽快！</div>
+            </div>
+          </div>
+          <div class="event-card" data-lat="35.6938" data-lng="139.8143" data-query="世界の山ちゃん 錦糸町南口店">
+            <img class="event-img" src="https://via.placeholder.com/72?text=Yamachan" alt="世界的山將">
+            <div class="event-info">
+              <span class="time">超狂重口味下酒菜</span><h4>世界の山ちゃん 錦糸町南口店</h4>
+              <div class="transit-guide">名古屋名物「夢幻手羽先 (炸雞翅)」！外帶大盒裝，胡椒香料極度重口味，啃起來超級過癮。</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="time-section">
+          <h3>🏪 24H 救星：超商大集合</h3>
+          <div class="event-card" data-lat="35.6938" data-lng="139.8127" data-query="全家 錦糸町站前店">
+            <img class="event-img" src="https://lh3.googleusercontent.com/d/1UMiGIgsCfXyUFG9DrwKtOSNSZBVGtB1e" alt="全家" onerror="this.src='https://via.placeholder.com/72?text=Family'">
+            <div class="event-info">
+              <span class="time">步行 1 分鐘</span><h4>全家 (FamilyMart) 錦糸町店</h4>
+              <div class="transit-guide">就在飯店轉角！買水、微波食品、領包裹、加值西瓜卡最方便。</div>
+            </div>
+          </div>
+          <div class="event-card" data-lat="35.6932" data-lng="139.8119" data-query="7-Eleven 錦糸町南口">
+            <img class="event-img" src="https://via.placeholder.com/72?text=7-11" alt="7-11">
+            <div class="event-info">
+              <span class="time">步行 3 分鐘</span><h4>7-Eleven</h4>
+              <div class="transit-guide">想買雪肌粹洗面乳或 7-11 限定零食、炸雞，來這家就對了。</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="time-section">
+          <h3>🛍️ 百貨商場與超市</h3>
+          <div class="event-card" data-lat="35.6974" data-lng="139.8133" data-query="LIFE Arcakit Kinshicho">
+            <img class="event-img" src="https://lh3.googleusercontent.com/d/1HJ0JybSuc7DC1IJKxAXvKmi6VaFCFnSA" alt="LIFE Arcakit">
+            <div class="event-info">
+              <span class="time">北口步行 3 分鐘</span><h4>LIFE (Arcakit 錦糸町店)</h4>
+              <div class="transit-guide">位於アルカキット地下1樓的超大型 LIFE 超市，生鮮、水果、便當應有盡有！</div>
+            </div>
+          </div>
+          <div class="event-card" data-lat="35.6942" data-lng="139.8145" data-query="西友 錦糸町店">
+            <img class="event-img" src="https://lh3.googleusercontent.com/d/1xQD2d8nTAZVESdxbhIbI9vd_42_aK8iu" alt="西友">
+            <div class="event-info">
+              <span class="time">南口步行 4 分鐘</span><h4>西友 (SEIYU) 錦糸町店</h4>
+              <div class="transit-guide">位於 PARCO 地下1樓，<strong>24 小時營業</strong>，半夜買零食宵夜的首選！</div>
+            </div>
+          </div>
+          <div class="event-card" data-lat="35.6950" data-lng="139.8138" data-query="丸井 錦糸町">
+            <img class="event-img" src="https://lh3.googleusercontent.com/d/1fSiEahKSWGkeEgdN_20A-taexB2BwXUI" alt="丸井" onerror="this.src='https://via.placeholder.com/72?text=OIOI'">
+            <div class="event-info">
+              <span class="time">步行 3 分鐘 (南口)</span><h4>OIOI 丸井百貨</h4>
+              <div class="transit-guide">Seria 百元店、GAP 等進駐。</div>
+            </div>
+          </div>
+          <div class="event-card" data-lat="35.6975" data-lng="139.8150" data-query="唐吉訶德 錦糸町北口店">
+            <img class="event-img" src="https://lh3.googleusercontent.com/d/1yMzyZvfCbADay31j-qEi_bWSJWi7yjD2" alt="唐吉訶德" onerror="this.src='https://via.placeholder.com/72?text=Donki'">
+            <div class="event-info">
+              <span class="time">步行 7 分鐘 (北口)</span><h4>唐吉訶德 錦糸町北口店</h4>
+              <div class="transit-guide">營業至凌晨 4 點。每天行程結束後隨時來補藥妝最順路。</div>
+            </div>
+          </div>
+          <div class="event-card" data-lat="35.7001" data-lng="139.8173" data-query="錦糸町 Olinas">
+            <img class="event-img" src="https://lh3.googleusercontent.com/d/1nBojEjBGXzgjdaBxJEcOtGG2fBzAiDbI" alt="Olinas" onerror="this.src='https://via.placeholder.com/72?text=Olinas'">
+            <div class="event-info">
+              <span class="time">周邊百貨</span><h4>錦糸町 Olinas</h4>
+              <div class="transit-guide">裡面有超寬敞的 GU 以及 Sports Authority 大型運動用品店。</div>
+            </div>
+          </div>
+          <div class="event-card" data-lat="35.6961" data-lng="139.8142" data-query="錦糸町 Termina">
+            <img class="event-img" src="https://lh3.googleusercontent.com/d/1nBojEjBGXzgjdaBxJEcOtGG2fBzAiDbI" alt="Termina" onerror="this.src='https://via.placeholder.com/72?text=Termina'">
+            <div class="event-info">
+              <span class="time">車站直結</span><h4>錦糸町 Termina</h4>
+              <div class="transit-guide">位於車站共構百貨內，裡面有規模適中、交通極便利的 UNIQLO。</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 🎫 預算與票券 -->
+      <div id="transport-content" class="day-content">
+        <div class="panel-header">
+          <p class="day-subtitle">TRANSPORT & BUDGET</p><h2>預算與交通票券</h2>
+        </div>
+        <div class="time-section">
+          <h3>專屬行程票券推薦</h3>
+          <div class="event-card" style="cursor: default;">
+            <img class="event-img" src="https://lh3.googleusercontent.com/d/1Ifzg6GRDAd7E2HIa6cSi4RIcZBrC-ATQ" alt="Suica" onerror="this.src='https://via.placeholder.com/72?text=Ticket'">
+            <div class="event-info">
+              <span class="time">全行程必備</span><h4>1. Apple Pay 數位西瓜卡 (Suica)</h4>
+              <div class="transit-guide">建議先用 iPhone 錢包儲值 <strong>¥5,000</strong>，搭乘 JR 與一般私鐵皆直接刷手機進站。</div>
+            </div>
+          </div>
+          <div class="event-card" style="cursor: default;">
+            <img class="event-img" src="https://lh3.googleusercontent.com/d/1jN-8YWIlDzJX-nTZJh30uuVtHDfv9F15" alt="Subway" onerror="this.src='https://via.placeholder.com/72?text=Ticket'">
+            <div class="event-info">
+              <span class="time">Day 4 專用神卡</span><h4>2. Tokyo Subway 24小時券</h4>
+              <div class="transit-guide">🎟 票價：<span class="price">¥800</span><br>Day 4 瘋狂搭地下鐵，買這張絕對回本。可於車站機台或Klook預購。</div>
+            </div>
+          </div>
+          <div class="event-card" style="cursor: default;">
+            <img class="event-img" src="https://lh3.googleusercontent.com/d/1LbaFV5dnXqHIrvrXB5zX5qxd6oRFgBLq" alt="川越聯票" onerror="this.src='https://via.placeholder.com/72?text=Ticket'">
+            <div class="event-info">
+              <span class="time">Day 3 專用神卡</span><h4>3. 川越特選優惠聯票 (Premium)</h4>
+              <div class="transit-guide">🎟 票價：<span class="price">¥1,050</span><br>包含「池袋來回川越車票」及「川越市內東武巴士搭到飽」。抵達池袋站時於東武窗口購買。</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 🗓️ Day 1 -->
+      <div id="day1-content" class="day-content active">
+        <div class="panel-header"><p class="day-subtitle">DAY 1 | 9/3(四)</p><h2>機場直奔 → 東京車站</h2></div>
+        <div class="time-section">
+          <h3>抵達與飯店 Check-in</h3>
+          <div class="event-card" data-lat="35.771986" data-lng="140.392850" data-query="成田國際機場">
+            <img class="event-img" src="https://lh3.googleusercontent.com/d/1PY9ehUoCPj78ZhZZsh0wEGA2g59BsEhm" alt="成田機場" onerror="this.src='https://via.placeholder.com/72?text=Image'">
+            <div class="event-info">
+              <span class="time">16:35降落</span><h4>成田機場 → 抵達錦糸町飯店</h4>
+              <div class="transit-guide">
+                <strong>🚇 路線：</strong>成田機場搭乘【JR總武線快速】(往逗子/橫須賀方向)，不需換車，約 75 分鐘。抵達錦糸町後請走『南口』出站。<br>
+                <strong>🎟 票價：</strong>刷西瓜卡約 <span class="price">¥1,340</span>
+              </div>
+            </div>
+          </div>
+          <div class="event-card" data-lat="35.694602" data-lng="139.813897" data-query="相鐵FRESA INN 東京錦糸町">
+            <img class="event-img" src="https://lh3.googleusercontent.com/d/1_E5FGiqv85c30Uw_MAy0PPwYQxUQ_vUl" alt="錦糸町飯店" onerror="this.src='https://via.placeholder.com/72?text=Image'">
+            <div class="event-info">
+              <span class="time">19:00</span><h4>相鐵FRESA INN 飯店 Check-in</h4>
+              <p>放好行李後，準備出門吃晚餐！</p>
+            </div>
+          </div>
+          <h3>Evening</h3>
+          <div class="event-card" data-lat="35.6807" data-lng="139.7616" data-query="一保堂茶舖 丸の内店">
+            <img class="event-img" src="https://lh3.googleusercontent.com/d/1eWRbWYPTneFusOd5Y7aNLg-U_woDE1h4" alt="一保堂" onerror="this.src='https://via.placeholder.com/72?text=Image'">
+            <div class="event-info">
+              <span class="time">19:40</span><h4>一保堂茶舖 新丸之內店</h4>
+              <div class="transit-guide">
+                <strong>🚇 路線：</strong>錦糸町搭乘【JR總武線快速】(往東京方向)，只需 2 站約 8 分鐘。到達東京站後，前往丸之內地下中央口出站。<br>
+                <strong>🎟 票價：</strong><span class="price">¥167</span>
+              </div>
+            </div>
+          </div>
+          <div class="event-card" data-lat="35.6800" data-lng="139.7681" data-query="東京車站一番街">
+            <img class="event-img" src="https://lh3.googleusercontent.com/d/170cT8k_4MpwAIYIgPVOun0y6psleY-zn" alt="東京車站" onerror="this.src='https://via.placeholder.com/72?text=Image'">
+            <div class="event-info">
+              <span class="time">20:20</span><h4>東京車站一番街 & 拉麵街</h4>
+              <div class="transit-guide">
+                <strong>🚶 路線：</strong>從一保堂徒步穿過東京車站連通道至「八重洲地下街」方向即達。<br>
+                <strong>💡 回程：</strong>搭【JR總武快速線】回錦糸町。
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="day1-custom-list"></div>
+        <button class="add-custom-btn" onclick="addDayCustom(1)">➕ 新增自訂行程至 Day 1</button>
+      </div>
+
+      <!-- 🗓️ Day 2 -->
+      <div id="day2-content" class="day-content">
+        <div class="panel-header"><p class="day-subtitle">DAY 2 | 9/4(五)</p><h2>鎌倉古都 → 橫濱夜景</h2></div>
+        <div class="time-section">
+          <h3>Morning (建議 07:20 出門)</h3>
+          <div class="event-card" data-lat="35.3216" data-lng="139.5526" data-query="小町通り">
+            <img class="event-img" src="https://lh3.googleusercontent.com/d/1Oup4So0HgnrDIwtVJsgOOFubQqeUa4vF" alt="小町通" onerror="this.src='https://via.placeholder.com/72?text=Image'">
+            <div class="event-info">
+              <span class="time">09:00</span><h4>小町通</h4>
+              <div class="transit-guide">
+                <strong>🚇 去程：</strong>錦糸町搭乘【JR總武快速線】直通運轉【JR橫須賀線】往逗子方向。不需下車轉乘，一車直達鎌倉站，車程約 60 分鐘。出站後走『東口』即可抵達小町通。
+              </div>
+            </div>
+          </div>
+          <div class="event-card" data-lat="35.3214" data-lng="139.5520" data-query="さくらの夢見屋 鎌倉小町通り本店">
+            <img class="event-img" src="https://lh3.googleusercontent.com/d/1oqXxlnC0FVTHeVfXX7eRHan-1rUsc9uP" alt="夢見屋" onerror="this.src='https://via.placeholder.com/72?text=Dango'">
+            <div class="event-info">
+              <span class="time">順路小吃</span><h4>さくらの夢見屋 (日式糰子)</h4>
+              <div class="transit-guide">小町通上的排隊名店，必吃夢幻的四色糰子或草莓餡糰子，超適合打卡！</div>
+            </div>
+          </div>
+          <div class="event-card" data-lat="35.3260" data-lng="139.5564" data-query="鶴岡八幡宮">
+            <img class="event-img" src="https://lh3.googleusercontent.com/d/109MsHaUNS5AvsV4kZIJK4v3K065FA5i8" alt="鶴岡八幡宮" onerror="this.src='https://via.placeholder.com/72?text=Image'">
+            <div class="event-info">
+              <span class="time">10:30</span><h4>鶴岡八幡宮 & 豐島屋</h4>
+              <div class="transit-guide">參拜完抽張「鳩籤」。出來必逛【豐島屋本店】，買最經典的伴手禮「鳩サブレー (鴿子餅乾)」。</div>
+            </div>
+          </div>
+          <div class="event-card" data-lat="35.3121" data-lng="139.5361" data-query="江之電長谷站">
+            <img class="event-img" src="https://lh3.googleusercontent.com/d/10-RAC45fEXAq4YY4azVgUaGjXZHBRz51" alt="江之電" onerror="this.src='https://via.placeholder.com/72?text=Image'">
+            <div class="event-info">
+              <span class="time">11:30</span><h4>體驗復古 江之電</h4>
+              <div class="transit-guide">
+                <strong>🚇 路線：</strong>走回鎌倉站，轉搭【江之電】至「長谷站」(約5分鐘 / <span class="price">¥200</span>)。
+              </div>
+            </div>
+          </div>
+          <div class="event-card" data-lat="35.3124" data-lng="139.5330" data-query="長谷寺">
+            <img class="event-img" src="https://lh3.googleusercontent.com/d/12JHJWh4W54Xr2h66Ca0qpOcaY4IsVUhG" alt="長谷寺" onerror="this.src='https://via.placeholder.com/72?text=Image'">
+            <div class="event-info">
+              <span class="time">11:45</span><h4>長谷寺</h4>
+              <p style="margin-top:5px;">找齊三組「良緣地藏」；見晴台看海。</p>
+            </div>
+          </div>
+        </div>
+        <div class="time-section">
+          <h3>Afternoon</h3>
+          <div class="event-card" data-lat="35.3168" data-lng="139.5357" data-query="鎌倉大佛高德院">
+            <img class="event-img" src="https://lh3.googleusercontent.com/d/1GyG-K3bJ-MNolnSHlRy0iXyZimxjofzQ" alt="鎌倉大佛" onerror="this.src='https://via.placeholder.com/72?text=Image'">
+            <div class="event-info">
+              <span class="time">14:00</span><h4>高德院 鎌倉大佛</h4>
+              <div class="transit-guide">
+                <strong>🚶 路線：</strong>從長谷寺徒步走過去約 5-10 分鐘即達。參觀完走回長谷站搭江之電回鎌倉站。<br>
+              </div>
+            </div>
+          </div>
+          <div class="event-card" data-lat="35.4554" data-lng="139.6389" data-query="橫濱合味道紀念館">
+            <img class="event-img" src="https://lh3.googleusercontent.com/d/1S9vW240Rl6nM6irvR9Fqoe8fY-60hoqx" alt="杯麵博物館" onerror="this.src='https://via.placeholder.com/72?text=Image'">
+            <div class="event-info">
+              <span class="time">15:30</span><h4>橫濱・杯麵博物館</h4>
+              <div class="transit-guide">
+                <strong>🚇 路線：</strong>從鎌倉站搭乘【JR橫須賀線】(往千葉/東京方向)至「橫濱站」(約25分) ➡ 站內依循指標轉乘【橫濱高速鐵道港未來線】(みなとみらい線) 至「港未來站」或「馬車道站」下車，步行即可抵達。
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="time-section">
+          <h3>Evening (橫濱浪漫夜景)</h3>
+          <div class="event-card" data-lat="35.4526" data-lng="139.6428" data-query="橫濱紅磚倉庫">
+            <img class="event-img" src="https://lh3.googleusercontent.com/d/1w8siIxlyY-lNucsoJj4xWKPYiIs36eqc" alt="紅磚倉庫" onerror="this.src='https://via.placeholder.com/72?text=Image'">
+            <div class="event-info">
+              <span class="time">17:00</span><h4>橫濱紅磚倉庫</h4>
+              <p>博物館徒步 5 分即達，欣賞夕陽與點燈。</p>
+            </div>
+          </div>
+          <div class="event-card" data-lat="35.4428" data-lng="139.6461" data-query="橫濱中華街">
+            <img class="event-img" src="https://lh3.googleusercontent.com/d/1HBIO-P_50YEKlWeV0NqH3rNFXZOExeGL" alt="中華街" onerror="this.src='https://via.placeholder.com/72?text=Image'">
+            <div class="event-info">
+              <span class="time">18:30</span><h4>橫濱中華街</h4>
+              <p>沿岸散步或搭公車前往。關帝廟+媽祖廟雙拜，可在此逛逛。</p>
+            </div>
+          </div>
+          <div class="event-card" data-lat="35.4641" data-lng="139.6174" data-query="家系総本山 吉村家">
+            <img class="event-img" src="https://lh3.googleusercontent.com/d/1b_d7D0SOo_AEeNR0Ye3IBMgkQ_vc5RV8" alt="吉村家" onerror="this.src='https://via.placeholder.com/72?text=Ramen'">
+            <div class="event-info">
+              <span class="time">晚餐備案</span><h4>吉村家 (家系拉麵總本山)</h4>
+              <div class="transit-guide">強烈推薦回到橫濱站吃這家「家系拉麵創始店」，正宗豚骨醬油重口味！</div>
+            </div>
+          </div>
+          <div class="event-card" data-lat="35.4556" data-lng="139.6366" data-query="橫濱太空世界 Cosmo Clock 21">
+            <img class="event-img" src="https://lh3.googleusercontent.com/d/1hpd5wWdOYeHlS_TOMDyKuVf4EUaJVaeK" alt="摩天輪" onerror="this.src='https://via.placeholder.com/72?text=Image'">
+            <div class="event-info">
+              <span class="time">20:30</span><h4>Cosmo Clock 21 摩天輪</h4>
+              <div class="transit-guide">
+                <strong>🚇 回程：</strong>從「櫻木町站」搭乘【JR根岸線】至橫濱站 ➡ 原地轉搭【JR橫須賀線(總武快速)】「一車直達」回錦糸町，不需一直換車換線！
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="day2-custom-list"></div>
+        <button class="add-custom-btn" onclick="addDayCustom(2)">➕ 新增自訂行程至 Day 2</button>
+      </div>
+
+      <!-- 🗓️ Day 3 -->
+      <div id="day3-content" class="day-content">
+        <div class="panel-header"><p class="day-subtitle">DAY 3 | 9/5(六)</p><h2>招財貓 → 小江戶川越 → 池袋</h2></div>
+        <div class="time-section">
+          <h3>Morning (建議 07:15 出門)</h3>
+          <div class="event-card" data-lat="35.6483" data-lng="139.6475" data-query="豪德寺">
+            <img class="event-img" src="https://lh3.googleusercontent.com/d/1VYZgS35ADKauR-AAnuOhmdXFT9KUFWnl" alt="豪德寺" onerror="this.src='https://via.placeholder.com/72?text=Image'">
+            <div class="event-info">
+              <span class="time">08:00</span><h4>豪德寺</h4>
+              <div class="transit-guide">
+                <strong>🚇 路線：</strong>錦糸町搭【Z 半藏門線】(紫線) 直通運轉【東急田園都市線】至「三軒茶屋站」➡ 依循『世田谷線』地上指標，換乘【東急世田谷線】路面電車至「宮之坂站」或「豪德寺站」下車步行。<br>
+              </div>
+            </div>
+          </div>
+          <div class="event-card" data-lat="35.7295" data-lng="139.7109" data-query="池袋駅">
+            <img class="event-img" src="https://lh3.googleusercontent.com/d/1kDu_md5JnAZXdJxVHqb15jwIC5ATK_Oh" alt="池袋轉乘" onerror="this.src='https://via.placeholder.com/72?text=Image'">
+            <div class="event-info">
+              <span class="time">10:30</span><h4>池袋轉乘買票</h4>
+              <div class="transit-guide">
+                <strong>🚇 路線：</strong>豪德寺搭【小田急線】至終點「新宿站」➡ 必須先刷卡出小田急線的閘門 ➡ 尋找綠色招牌的『JR 線』入口，再刷一次 Suica 進站搭乘【JR山手線】至池袋。<br>
+                <strong>🎟 買票：</strong>在池袋站的『東武鐵道窗口』購買川越特選優惠聯票。
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="time-section">
+          <h3>川越市區拆解 (搭乘小江戶巡迴巴士)</h3>
+          <div class="event-card" data-lat="35.9175" data-lng="139.4880" data-query="川越 喜多院">
+            <img class="event-img" src="https://lh3.googleusercontent.com/d/1-ZjkdrtOCbuA4sQhJMStr24SSuxBk3hW" alt="喜多院" onerror="this.src='https://via.placeholder.com/72?text=Kitain'">
+            <div class="event-info">
+              <span class="time">11:15</span><h4>川越・喜多院</h4>
+              <div class="transit-guide">
+                <strong>🚌 路線：</strong>從池袋搭乘【東武東上線】急行列車，約 30 分鐘直達川越站。出站後搭乘小江戶巡迴巴士於「喜多院」下車。
+              </div>
+            </div>
+          </div>
+          <div class="event-card" data-lat="35.9189" data-lng="139.4839" data-query="大正浪漫夢通り">
+            <img class="event-img" src="https://lh3.googleusercontent.com/d/10R8YVTPbMEEdori3lLBR-6MW2c4LXY6u" alt="大正浪漫夢通り" onerror="this.src='https://via.placeholder.com/72?text=Image'">
+            <div class="event-info">
+              <span class="time">12:00</span><h4>大正浪漫夢通り</h4>
+              <p>大正時代和洋混搭老街，紅磚洋樓超好拍。</p>
+            </div>
+          </div>
+          <div class="event-card" data-lat="35.9197" data-lng="139.4836" data-query="川越熊野神社">
+            <img class="event-img" src="https://lh3.googleusercontent.com/d/1yjMVcV_fcO5HSYpgJ_0w1adIFvyb3BoW" alt="川越熊野神社" onerror="this.src='https://via.placeholder.com/72?text=Image'">
+            <div class="event-info">
+              <span class="time">12:30</span><h4>川越熊野神社</h4>
+              <p>體驗銭洗弁財天洗錢、足踏健康步道。</p>
+            </div>
+          </div>
+          <div class="event-card" data-lat="35.9225" data-lng="139.4832" data-query="小川菊 川越">
+            <img class="event-img" src="https://via.placeholder.com/72?text=Eel" alt="小川菊">
+            <div class="event-info">
+              <span class="time">13:15 (午餐)</span><h4>小川菊 (百年鰻魚飯)</h4>
+              <div class="transit-guide">來到川越絕對必吃！創立於1807年的老字號炭烤鰻魚飯，香氣四溢。</div>
+            </div>
+          </div>
+          <div class="event-card" data-lat="35.9238" data-lng="139.4828" data-query="川越 一番街 藏造老街">
+            <img class="event-img" src="https://lh3.googleusercontent.com/d/1nXOBqNIenpT7v5vmco14bT6PCoyUFNih" alt="一番街藏造老街" onerror="this.src='https://via.placeholder.com/72?text=Image'">
+            <div class="event-info">
+              <span class="time">14:00</span><h4>一番街藏造老街</h4>
+              <div class="transit-guide">順著老街逛，別忘了買超人氣的散步小吃「小江戶おさつ庵 (炸地瓜片)」。</div>
+            </div>
+          </div>
+          <div class="event-card" data-lat="35.9238" data-lng="139.4831" data-query="時の鐘 川越">
+            <img class="event-img" src="https://lh3.googleusercontent.com/d/1nXOBqNIenpT7v5vmco14bT6PCoyUFNih" alt="時之鐘" onerror="this.src='https://via.placeholder.com/72?text=Image'">
+            <div class="event-info">
+              <span class="time">14:30</span><h4>時之鐘</h4>
+              <div class="transit-guide">鐘樓對面有特色町屋星巴克。旁邊的「菓匠右門」必買剛出爐的紅豆地瓜麻糬『いも恋』。</div>
+            </div>
+          </div>
+          <div class="event-card" data-lat="35.9272" data-lng="139.4881" data-query="川越冰川神社">
+            <img class="event-img" src="https://lh3.googleusercontent.com/d/1ccBKM0BxEDSf8I-evSh-CdCOkavTJr7T" alt="川越冰川神社" onerror="this.src='https://via.placeholder.com/72?text=Image'">
+            <div class="event-info">
+              <span class="time">15:30</span><h4>川越冰川神社</h4>
+              <p>風鈴迴廊；釣鯛魚籤 (あい鯛)。結束後搭巴士回川越站。</p>
+            </div>
+          </div>
+        </div>
+        <div class="time-section">
+          <h3>Evening (池袋購物激戰區)</h3>
+          <div class="event-card" data-lat="35.7295" data-lng="139.7109" data-query="池袋駅">
+            <img class="event-img" src="https://lh3.googleusercontent.com/d/1g6pVxoZl4i4gKPKF77-J0nBZfi6FKpci" alt="池袋美妝" onerror="this.src='https://via.placeholder.com/72?text=Image'">
+            <div class="event-info">
+              <span class="time">17:30</span><h4>池袋站周邊採購</h4>
+              <div class="transit-guide">
+                <strong>🚇 回程：</strong>搭乘東武東上線回池袋順路下車採買。
+              </div>
+              <p style="margin-top:5px;">去唐吉訶德買化妝水與粉餅，這裡還匯集了 Adidas 品牌中心、GU 大型店與 UNIQLO！</p>
+            </div>
+          </div>
+          <div class="event-card" data-lat="35.7275" data-lng="139.7115" data-query="無敵家 拉麵 池袋">
+            <img class="event-img" src="https://lh3.googleusercontent.com/d/16meKL6zFf4UmO7kuqVQKvbRjFb6bJNab" alt="無敵家" onerror="this.src='https://via.placeholder.com/72?text=Ramen'">
+            <div class="event-info">
+              <span class="time">19:30 (晚餐)</span><h4>無敵家 (超濃郁豚骨拉麵)</h4>
+              <div class="transit-guide">池袋聲量最高的排隊名店，骨髓濃郁湯頭配上超厚炙燒叉燒。<br>結束後搭【JR山手線】至秋葉原轉【JR總武線各停】回錦糸町。</div>
+            </div>
+          </div>
+        </div>
+        <div id="day3-custom-list"></div>
+        <button class="add-custom-btn" onclick="addDayCustom(3)">➕ 新增自訂行程至 Day 3</button>
+      </div>
+
+      <!-- 🗓️ Day 4 -->
+      <div id="day4-content" class="day-content">
+        <div class="panel-header"><p class="day-subtitle">DAY 4 | 9/6(日)</p><h2>龜有尋寶 & 經典市區</h2></div>
+        <div class="time-section">
+          <h3>Morning (啟用 Subway 24H券 🎟️ 建議 07:30 出門)</h3>
+          <div class="event-card" data-lat="35.6836" data-lng="139.7846" data-query="水天宮 東京">
+            <img class="event-img" src="https://lh3.googleusercontent.com/d/1gT-lfIfQPejIqDGCmkKW28a_IszyaAuC" alt="水天宮" onerror="this.src='https://via.placeholder.com/72?text=Image'">
+            <div class="event-info">
+              <span class="time">08:00</span><h4>水天宮</h4>
+              <div class="transit-guide">
+                <strong>🚇 路線：</strong>錦糸町搭【Z 半藏門線】(往澀谷方向) 至「水天宮前站」，僅需 3 站約 6 分鐘，走 5 號出口最近。
+              </div>
+            </div>
+          </div>
+          <div class="event-card" data-lat="35.6763" data-lng="139.6993" data-query="明治神宮">
+            <img class="event-img" src="https://lh3.googleusercontent.com/d/1rNJFPn4piGq7kj8gUiWsJv4ma_Mz1gkx" alt="明治神宮" onerror="this.src='https://via.placeholder.com/72?text=Image'">
+            <div class="event-info">
+              <span class="time">09:30</span><h4>明治神宮</h4>
+              <div class="transit-guide">
+                <strong>🚇 路線：</strong>水天宮前站搭【Z 半藏門線】至「表參道站」 ➡ 站內依循綠色指標，同站往下走一層樓梯轉乘【C 千代田線】至「明治神宮前站」，走 2 號出口。
+              </div>
+            </div>
+          </div>
+          <div class="event-card" data-lat="35.6653" data-lng="139.7713" data-query="築地場外市場">
+            <img class="event-img" src="https://lh3.googleusercontent.com/d/1KRuj0MzLuwVKGb1ZWRNBtHwUHZL3WKQ0" alt="築地市場" onerror="this.src='https://via.placeholder.com/72?text=Image'">
+            <div class="event-info">
+              <span class="time">11:30 (午餐)</span><h4>築地外圍市場</h4>
+              <div class="transit-guide">
+                <strong>🚇 路線：</strong>明治神宮前站搭【C 千代田線】至「日比谷站」 ➡ 站內依灰色指標轉乘【H 日比谷線】至「築地站」，走 1 號出口抵達場外市場。
+              </div>
+              <p style="margin-top:5px;">必吃：山長/丸武玉子燒 → 海鮮丼 → 茶寮抹茶糰子。</p>
+            </div>
+          </div>
+        </div>
+        <div class="time-section">
+          <h3>Afternoon</h3>
+          <div class="event-card" data-lat="35.7147" data-lng="139.7966" data-query="淺草寺 雷門">
+            <img class="event-img" src="https://lh3.googleusercontent.com/d/1p3sn_vpYywYFupBxgg6OlnAVn-rZHf-6" alt="淺草寺" onerror="this.src='https://via.placeholder.com/72?text=Image'">
+            <div class="event-info">
+              <span class="time">13:30</span><h4>淺草寺 雷門</h4>
+              <div class="transit-guide">
+                <strong>🚇 路線：</strong>築地站搭【H 日比谷線】至「上野站」 ➡ 站內依橘色指標轉乘【G 銀座線】至「淺草站」，走 1 號出口出來即是雷門。
+              </div>
+            </div>
+          </div>
+          <div class="event-card" data-lat="35.7258" data-lng="139.8052" data-query="今戶神社">
+            <img class="event-img" src="https://lh3.googleusercontent.com/d/1ntO2Sbs3cTYx_-sQUdbrg73zRf_35oGK" alt="今戶神社" onerror="this.src='https://via.placeholder.com/72?text=Image'">
+            <div class="event-info">
+              <span class="time">14:30</span><h4>今戶神社</h4>
+              <div class="transit-guide">
+                <strong>🚶 路線：</strong>淺草寺周圍散步或搭乘當地公車過去。
+              </div>
+              <p style="margin-top:5px;">招財貓發源地之一，雙貓繪馬求良緣。</p>
+            </div>
+          </div>
+          <div class="event-card" data-lat="35.7667" data-lng="139.8480" data-query="龜有駅">
+            <img class="event-img" src="https://lh3.googleusercontent.com/d/1vAI-kj08mZB9vN0M6bqjGz8pvxagyU03" alt="龜有" onerror="this.src='https://via.placeholder.com/72?text=Image'">
+            <div class="event-info">
+              <span class="time">15:30</span><h4>龜有尋寶 (烏龍派出所)</h4>
+              <div class="transit-guide">
+                <strong>🚇 路線：</strong>淺草搭【G 銀座線】至「上野」 ➡ 必須刷卡出地鐵站，改走到地上的 JR 上野站入站 ➡ 搭乘【JR常磐線】至「龜有站」。(此段 JR 無法使用地鐵券，需刷 Suica)
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="time-section">
+          <h3>Evening (阿美橫町購物與美食)</h3>
+          <div class="event-card" data-lat="35.7099" data-lng="139.7745" data-query="阿美橫丁">
+            <img class="event-img" src="https://lh3.googleusercontent.com/d/1E2LD8RyGJTCg-bARMW2x8KhYkSc_07pG" alt="阿美橫丁" onerror="this.src='https://via.placeholder.com/72?text=Image'">
+            <div class="event-info">
+              <span class="time">17:45</span><h4>上野 阿美橫丁</h4>
+              <div class="transit-guide">
+                <strong>🚇 路線：</strong>龜有搭【JR常磐線】回「上野站」或「日暮里站」。
+              </div>
+              <p style="margin-top:5px;">傍晚叫賣最熱時段。除了買二木の菓子與多慶屋免稅，一定要逛站前的「UNIQLO & GU 聯合大樓」與超大的 ABC-MART！</p>
+            </div>
+          </div>
+          <div class="event-card" data-lat="35.7073" data-lng="139.7745" data-query="山家 炸豬排 御徒町店">
+            <img class="event-img" src="https://via.placeholder.com/72?text=Food" alt="山家 炸豬排" onerror="this.src='https://via.placeholder.com/72?text=Food'">
+            <div class="event-info">
+              <span class="time">18:45 (晚餐)</span><h4>阿美橫町 晚餐推薦</h4>
+              <div class="transit-guide">推薦御徒町站旁千圓有找的平價神級炸豬排「山家 (Yamabe)」。想吃小吃也有銀章魚燒 (Gindaco)！</div>
+            </div>
+          </div>
+          <div class="event-card" data-lat="35.6983" data-lng="139.7731" data-query="秋葉原">
+            <img class="event-img" src="https://lh3.googleusercontent.com/d/1BznFyGc_jeaS7m_MwzqakO3NWQV7GWRh" alt="秋葉原" onerror="this.src='https://via.placeholder.com/72?text=Image'">
+            <div class="event-info">
+              <span class="time">19:45</span><h4>秋葉原 → 回飯店</h4>
+              <div class="transit-guide">
+                <strong>🚇 路線：</strong>上野站轉搭【JR山手線】至「秋葉原」(2站)。<br>
+                <strong>🚇 回程：</strong>秋葉原搭【JR總武線各停】(黃線) 回錦糸町 (3站6分)。
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="day4-custom-list"></div>
+        <button class="add-custom-btn" onclick="addDayCustom(4)">➕ 新增自訂行程至 Day 4</button>
+      </div>
+
+      <!-- 🗓️ Day 5 -->
+      <div id="day5-content" class="day-content">
+        <div class="panel-header"><p class="day-subtitle">DAY 5 | 9/7(一)</p><h2>成田山老街 → 滿載而歸</h2></div>
+        <div class="time-section">
+          <h3>Morning</h3>
+          <div class="event-card" data-lat="35.694602" data-lng="139.813897" data-query="錦糸町駅">
+            <img class="event-img" src="https://lh3.googleusercontent.com/d/1_E5FGiqv85c30Uw_MAy0PPwYQxUQ_vUl" alt="錦糸町" onerror="this.src='https://via.placeholder.com/72?text=Image'">
+            <div class="event-info">
+              <span class="time">08:00 退房</span><h4>飯店最後補給</h4>
+              <div class="transit-guide">
+                <strong>💡 行李對策：</strong>可先將行李寄放在飯店，或直接拖去錦糸町站、成田站的投幣式置物櫃寄放。
+              </div>
+            </div>
+          </div>
+          <div class="event-card" data-lat="35.7828" data-lng="140.3175" data-query="成田山表参道">
+            <img class="event-img" src="https://lh3.googleusercontent.com/d/1HMk9RWyUiUa6ziJj7PODX-Jejg9gZtnS" alt="成田山表參道" onerror="this.src='https://via.placeholder.com/72?text=Image'">
+            <div class="event-info">
+              <span class="time">10:00</span><h4>成田山表參道</h4>
+              <div class="transit-guide">
+                <strong>🚇 路線：</strong>錦糸町搭【JR總武快速線】往成田機場方向，於「成田站」下車 (非機場站)。出站徒步 10 分鐘即達老街。<br>
+                <strong>🎟 票價：</strong>刷西瓜卡 <span class="price">¥1,166</span>
+              </div>
+              <p style="margin-top:5px;">漫步復古表參道，品嚐現烤鰻魚飯。</p>
+            </div>
+          </div>
+          <div class="event-card" data-lat="35.7852" data-lng="140.3162" data-query="成田山新勝寺">
+            <img class="event-img" src="https://lh3.googleusercontent.com/d/1B_cZq_qqwqRO5fVmeGSfDBhzLXFy3WuE" alt="成田山新勝寺" onerror="this.src='https://via.placeholder.com/72?text=Image'">
+            <div class="event-info">
+              <span class="time">11:00</span><h4>成田山新勝寺</h4>
+              <p>表參道走到底即達，進寺內參拜。</p>
+            </div>
+          </div>
+        </div>
+        <div class="time-section">
+          <h3>Afternoon</h3>
+          <div class="event-card" data-lat="35.771986" data-lng="140.392850" data-query="成田國際機場">
+            <img class="event-img" src="https://lh3.googleusercontent.com/d/1XGJQb-Pcwizrw8YnYVXX_GO9dPh0Qi8o" alt="成田機場回程" onerror="this.src='https://via.placeholder.com/72?text=Image'">
+            <div class="event-info">
+              <span class="time">14:30 抵達機場</span><h4>前往成田機場 (17:55 起飛)</h4>
+              <div class="transit-guide">
+                <strong>🚇 路線：</strong>從「JR成田站」搭乘【JR成田線】，或從「京成成田站」搭乘【京成電鐵】，搭 1~2 站即可快速抵達成田機場航廈。請預留提早2.5小時抵達機場。<br>
+                <strong>🎟 票價：</strong>JR <span class="price">¥200</span> / 京成 <span class="price">¥272</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="day5-custom-list"></div>
+        <button class="add-custom-btn" onclick="addDayCustom(5)">➕ 新增自訂行程至 Day 5</button>
+      </div>
+
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    // 初始化單指地圖
+    const map = L.map('leaflet-map', { zoomControl: false }).setView([35.6895, 139.6917], 11);
+    L.control.zoom({ position: 'topleft' }).addTo(map);
+    L.tileLayer('https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}&hl=zh-TW', { maxZoom: 20, attribution: '© Google' }).addTo(map);
+
+    let currentMarkers = [];
+    let currentPolyline = null;
+    let currentPlaceData = { title: "", url: "", img: "", desc: "", lat: 0, lng: 0 };
+    let currentTab = 'day1-content';
+    let isGoogleMode = false;
+
+    // 手機版切換面板高度
+    function togglePanel() {
+      const panel = document.querySelector('.itinerary-panel');
+      const btn = document.querySelector('.mobile-toggle');
+      panel.classList.toggle('collapsed');
+      if(panel.classList.contains('collapsed')) {
+        btn.innerHTML = '🔼 展開行程表';
+        btn.style.background = '#34a853';
+      } else {
+        btn.innerHTML = '🔽 收起行程表，查看全螢幕地圖';
+        btn.style.background = '#1a73e8';
+      }
+    }
+
+    // 雙地圖切換引擎 (單指滑動 vs 雙指 Google 探索)
+    function toggleMapMode() {
+      isGoogleMode = !isGoogleMode;
+      const toggleBtn = document.getElementById('map-mode-toggle');
+      const lMap = document.getElementById('leaflet-map');
+      const gMap = document.getElementById('google-iframe');
+      
+      if(isGoogleMode) {
+          toggleBtn.innerHTML = '🗺️ 切換回單指行程地圖';
+          toggleBtn.style.color = '#ea4335';
+          toggleBtn.style.borderColor = '#ea4335';
+          lMap.style.display = 'none';
+          gMap.style.display = 'block';
+          const center = map.getCenter();
+          gMap.src = `https://maps.google.com/maps?q=${center.lat},${center.lng}&z=16&output=embed`;
+      } else {
+          toggleBtn.innerHTML = '🔍 切換 Google 探索地圖';
+          toggleBtn.style.color = '#1a73e8';
+          toggleBtn.style.borderColor = '#1a73e8';
+          lMap.style.display = 'block';
+          gMap.style.display = 'none';
+          setTimeout(() => { map.invalidateSize(); }, 100);
+      }
+    }
+
+    // 地鐵圖縮放
+    let subwayBaseHeight = 1600;
+    function zoomSubway(factor) {
+      subwayBaseHeight *= factor;
+      if (subwayBaseHeight < 600) subwayBaseHeight = 600;
+      if (subwayBaseHeight > 6000) subwayBaseHeight = 6000;
+      document.querySelector('#subway-map-wrapper img').style.height = subwayBaseHeight + 'px';
+    }
+
+    function openBottomSheet() { document.getElementById('custom-bottom-sheet').classList.add('open'); }
+    function closeBottomSheet() { document.getElementById('custom-bottom-sheet').classList.remove('open'); }
+    function openCurrentGMaps() { if(currentPlaceData.url) window.open(currentPlaceData.url, '_blank'); }
+
+    function exploreNearby() {
+        const gMap = document.getElementById('google-iframe');
+        if (currentTab !== 'hotel-content') {
+            isGoogleMode = true;
+            const toggleBtn = document.getElementById('map-mode-toggle');
+            toggleBtn.innerHTML = '🗺️ 切換回單指行程地圖';
+            toggleBtn.style.color = '#ea4335';
+            toggleBtn.style.borderColor = '#ea4335';
+            document.getElementById('leaflet-map').style.display = 'none';
+            gMap.style.display = 'block';
+        }
+        gMap.src = `https://maps.google.com/maps?q=${currentPlaceData.lat},${currentPlaceData.lng}&z=17&output=embed`;
+        closeBottomSheet();
+        if (window.innerWidth <= 768) {
+           const panel = document.querySelector('.itinerary-panel');
+           if (!panel.classList.contains('collapsed')) togglePanel();
+        }
+    }
+
+    // ---------------- 釘選與自訂行程系統 ----------------
+    let favorites = JSON.parse(localStorage.getItem('tokyoFavs')) || [];
+
+    function renderFavs() {
+      const favList = document.getElementById('fav-list');
+      if(!favList) return;
+      favList.innerHTML = '';
+      if(favorites.length === 0) {
+        favList.innerHTML = '<p style="color:#888; font-size:13px; text-align:center;">目前還沒有最愛景點喔！<br>點擊下方任一景點的「⭐」即可一鍵加入。</p>';
+        return;
+      }
+      favorites.forEach((fav, index) => {
+        const html = `
+          <div class="event-card" style="position:relative;" onclick="openCustomSheet('${fav.title}', '${fav.url}', '${fav.img}', '${fav.desc}', ${fav.lat}, ${fav.lng})">
+            <img class="event-img" src="${fav.img}" alt="Fav">
+            <div class="event-info">
+              <h4 style="font-size:15px; margin-bottom:5px;">${fav.title}</h4>
+              <p style="font-size:12px; color:#888; margin-bottom:8px; line-height:1.3;">${fav.desc.substring(0,35)}...</p>
+              <div class="action-buttons" style="margin-top:0;">
+                <button class="action-btn map-btn" onclick="window.open('${fav.url}', '_blank'); event.stopPropagation();" style="padding:6px; font-size:12px;">🗺️ 導航</button>
+                <button class="action-btn" onclick="removeFav(${index}); event.stopPropagation();" style="background:#ffeeee; color:#e74c3c; padding:6px; font-size:12px; border:1px solid #fadbd8;">🗑️ 移除</button>
+              </div>
+            </div>
+          </div>`;
+        favList.insertAdjacentHTML('beforeend', html);
+      });
+    }
+
+    function saveToFavoritesFromBottomSheet() {
+      if(!currentPlaceData.title) return;
+      if (currentTab === 'hotel-content' || currentTab === 'transport-content' || currentTab === 'subway-content') {
+          const exists = favorites.find(f => f.title === currentPlaceData.title);
+          if(!exists) {
+              favorites.unshift(currentPlaceData);
+              localStorage.setItem('tokyoFavs', JSON.stringify(favorites));
+              renderFavs();
+              alert("✅ 已成功加入「飯店周邊」的我的最愛清單！");
+          } else { alert("這個地點已經在您的最愛中囉！"); }
+      } else if (currentTab.startsWith('day')) {
+          const dayNum = currentTab.replace('day', '').replace('-content', '');
+          let dayList = JSON.parse(localStorage.getItem(`tokyoDay${dayNum}`)) || [];
+          const exists = dayList.find(f => f.title === currentPlaceData.title);
+          if(!exists) {
+              dayList.push(currentPlaceData);
+              localStorage.setItem(`tokyoDay${dayNum}`, JSON.stringify(dayList));
+              renderDayCustom();
+              alert(`✅ 已成功釘選至 Day ${dayNum} 的專屬行程！`);
+          } else { alert(`這個地點已經在 Day ${dayNum} 中囉！`); }
+      }
+    }
+
+    function removeFav(index) {
+      if(confirm('確定要移除這個最愛地點嗎？')) {
+        favorites.splice(index, 1);
+        localStorage.setItem('tokyoFavs', JSON.stringify(favorites));
+        renderFavs();
+      }
+    }
+
+    function quickAddPlace() {
+        const name = prompt("請輸入您找到的景點/餐廳名稱：\n(系統將自動為您轉換為 Google 導航連結)");
+        if(!name) return;
+        const searchParam = encodeURIComponent(name);
+        const url = `https://www.google.com/maps/search/?api=1&query=${searchParam}`;
+        
+        let centerLat = 35.694602;
+        let centerLng = 139.813897;
+        if (currentTab !== 'hotel-content' && currentTab !== 'subway-content') {
+           const center = map.getCenter();
+           centerLat = center.lat; centerLng = center.lng;
+        }
+        
+        const newItem = {
+            title: name, url: url, img: 'https://via.placeholder.com/72?text=New', desc: '🌟 您專屬的自訂探索行程', lat: centerLat, lng: centerLng
+        };
+
+        if (currentTab === 'hotel-content' || currentTab === 'transport-content' || currentTab === 'subway-content') {
+            favorites.unshift(newItem);
+            localStorage.setItem('tokyoFavs', JSON.stringify(favorites));
+            renderFavs();
+            alert("✅ 已成功加入「飯店周邊」的我的最愛清單！\n請滑動至面板最上方查看。");
+        } else if (currentTab.startsWith('day')) {
+            const dayNum = currentTab.replace('day', '').replace('-content', '');
+            let dayList = JSON.parse(localStorage.getItem(`tokyoDay${dayNum}`)) || [];
+            dayList.push(newItem);
+            localStorage.setItem(`tokyoDay${dayNum}`, JSON.stringify(dayList));
+            renderDayCustom();
+            alert(`✅ 已成功加入 Day ${dayNum} 的專屬行程！\n請滑動至面板最下方查看。`);
+        }
+    }
+    
+    function searchNearby(keyword) {
+        isGoogleMode = true;
+        document.getElementById('leaflet-map').style.display = 'none';
+        document.getElementById('subway-map-container').style.display = 'none';
+        const gMap = document.getElementById('google-iframe');
+        gMap.style.display = 'block';
+        
+        const toggleBtn = document.getElementById('map-mode-toggle');
+        toggleBtn.innerHTML = '🗺️ 切換回單指行程地圖';
+        toggleBtn.style.color = '#ea4335';
+        toggleBtn.style.borderColor = '#ea4335';
+        
+        let lat = currentPlaceData.lat || map.getCenter().lat;
+        let lng = currentPlaceData.lng || map.getCenter().lng;
+        gMap.src = `https://maps.google.com/maps?q=${encodeURIComponent(keyword)} near ${lat},${lng}&z=15&output=embed`;
+        
+        closeBottomSheet();
+        if (window.innerWidth <= 768) {
+           const panel = document.querySelector('.itinerary-panel');
+           if (!panel.classList.contains('collapsed')) togglePanel();
+        }
+    }
+
+    function addDayCustom(day) {
+        const name = prompt(`請輸入要在 Day ${day} 新增的店家名稱：`);
+        if(!name) return;
+        const searchParam = encodeURIComponent(name);
+        const url = `https://www.google.com/maps/search/?api=1&query=${searchParam}`;
+        let dayList = JSON.parse(localStorage.getItem(`tokyoDay${day}`)) || [];
+        dayList.push({ title: name, url: url, img: 'https://via.placeholder.com/72?text=New', desc: '🌟 自訂隱藏版行程', lat: 35.6895, lng: 139.6917 });
+        localStorage.setItem(`tokyoDay${day}`, JSON.stringify(dayList));
+        renderDayCustom();
+    }
+
+    function removeDayCustom(day, index) {
+        if(confirm('確定要移除這個行程嗎？')) {
+            let dayList = JSON.parse(localStorage.getItem(`tokyoDay${day}`)) || [];
+            dayList.splice(index, 1);
+            localStorage.setItem(`tokyoDay${day}`, JSON.stringify(dayList));
+            renderDayCustom();
+        }
+    }
+
+    function renderDayCustom() {
+        for(let i=1; i<=5; i++) {
+            const listEl = document.getElementById(`day${i}-custom-list`);
+            if(!listEl) continue;
+            listEl.innerHTML = '';
+            let dayList = JSON.parse(localStorage.getItem(`tokyoDay${i}`)) || [];
+            dayList.forEach((item, index) => {
+                const html = `
+                <div class="event-card" style="position:relative;" onclick="openCustomSheet('${item.title}', '${item.url}', '${item.img}', '${item.desc}', ${item.lat}, ${item.lng})">
+                  <img class="event-img" src="${item.img}" alt="Custom">
+                  <div class="event-info">
+                    <span class="time" style="color:#e74c3c;">🌟 自訂釘選</span>
+                    <h4 style="margin-bottom:5px;">${item.title}</h4>
+                    <div class="action-buttons" style="margin-top:5px;">
+                      <button class="action-btn map-btn" onclick="window.open('${item.url}', '_blank'); event.stopPropagation();" style="padding:6px; font-size:12px;">🗺️ 導航</button>
+                      <button class="action-btn" onclick="removeDayCustom(${i}, ${index}); event.stopPropagation();" style="background:#ffeeee; color:#e74c3c; padding:6px; font-size:12px; border:1px solid #fadbd8;">🗑️ 移除</button>
+                    </div>
+                  </div>
+                </div>`;
+                listEl.insertAdjacentHTML('beforeend', html);
+            });
+        }
+    }
+
+    function attachPinButtons() {
+      document.querySelectorAll('.event-card').forEach(card => {
+        if(card.querySelector('.card-pin-btn') || card.closest('#fav-list') || card.closest('[id$="-custom-list"]') || !card.hasAttribute('data-lat')) return;
+        const pinBtn = document.createElement('button');
+        pinBtn.className = 'card-pin-btn';
+        pinBtn.innerHTML = '⭐';
+        
+        pinBtn.addEventListener('click', (e) => {
+          e.preventDefault(); e.stopPropagation();
+          const title = card.querySelector('h4') ? card.querySelector('h4').innerText : '未知景點';
+          const img = card.querySelector('img') ? card.querySelector('img').src : '';
+          const lat = card.getAttribute('data-lat');
+          const lng = card.getAttribute('data-lng');
+          const query = card.getAttribute('data-query');
+          const guide = card.querySelector('.transit-guide') ? card.querySelector('.transit-guide').innerHTML : '';
+          const url = `https://www.google.com/maps/search/?api=1&query=${query ? encodeURIComponent(query) : lat+','+lng}`;
+          const placeData = { title, url, img, desc: guide, lat: lat, lng: lng };
+          
+          if (currentTab === 'hotel-content' || currentTab === 'transport-content' || currentTab === 'subway-content') {
+              const exists = favorites.find(f => f.title === placeData.title);
+              if(!exists) {
+                  favorites.unshift(placeData);
+                  localStorage.setItem('tokyoFavs', JSON.stringify(favorites));
+                  renderFavs();
+                  showPinSuccess(pinBtn);
+              } else alert('這已經在您的最愛清單中囉！');
+          } else if (currentTab.startsWith('day')) {
+              const dayNum = currentTab.replace('day', '').replace('-content', '');
+              let dayList = JSON.parse(localStorage.getItem(`tokyoDay${dayNum}`)) || [];
+              const exists = dayList.find(f => f.title === placeData.title);
+              if(!exists) {
+                  dayList.push(placeData);
+                  localStorage.setItem(`tokyoDay${dayNum}`, JSON.stringify(dayList));
+                  renderDayCustom();
+                  showPinSuccess(pinBtn);
+              } else alert(`這已經在 Day ${dayNum} 中囉！`);
+          }
+        });
+        card.style.position = 'relative';
+        card.appendChild(pinBtn);
+      });
+    }
+
+    function showPinSuccess(btn) {
+        btn.innerHTML = '✅'; btn.style.background = '#e6f4ea';
+        setTimeout(() => { btn.innerHTML = '⭐'; btn.style.background = '#fff'; }, 2000);
+    }
+
+    window.openCustomSheet = function(title, url, img, desc, lat, lng) {
+        currentPlaceData = { title, url, img, desc, lat: lat||35.694602, lng: lng||139.813897 }; 
+        document.getElementById('bs-title').innerText = title;
+        document.getElementById('bs-img').src = img;
+        document.getElementById('bs-desc').innerHTML = desc;
+        document.getElementById('bs-rating-score').innerText = (Math.random() * (4.8 - 3.8) + 3.8).toFixed(1);
+        document.getElementById('bs-reviews').innerText = `(${Math.floor(Math.random() * 3000) + 200})`;
+        openBottomSheet();
+    }
+    // -----------------------------------------------------------
+
+    function clearSubwayPins() {
+      const wrapper = document.getElementById('subway-map-wrapper');
+      wrapper.querySelectorAll('.subway-pin, .transfer-ring').forEach(pin => pin.remove());
+      const svg = document.getElementById('subway-svg-overlay');
+      if (svg) svg.innerHTML = '';
+    }
+
+    function showSubwayTransfer(el) {
+      document.getElementById('leaflet-map').style.display = 'none';
+      document.getElementById('google-iframe').style.display = 'none';
+      document.getElementById('subway-map-container').style.display = 'block';
+      document.getElementById('zoom-controls').style.display = 'flex';
+      document.getElementById('map-mode-toggle').style.display = 'none';
+      document.getElementById('search-supermarket-btn').style.display = 'none';
+      document.getElementById('quick-add-btn').style.display = 'none';
+      
+      clearSubwayPins();
+      closeBottomSheet();
+      
+      const ptsStr = el.getAttribute('data-subway-paths');
+      const ringsStr = el.getAttribute('data-subway-rings');
+      const endsStr = el.getAttribute('data-subway-ends');
+      if(!ptsStr || !ringsStr || !endsStr) return;
+      
+      const paths = JSON.parse(ptsStr), rings = JSON.parse(ringsStr), ends = JSON.parse(endsStr);
+      const wrapper = document.getElementById('subway-map-wrapper');
+      const svg = document.getElementById('subway-svg-overlay');
+      
+      paths.forEach(p => {
+        for(let i=0; i < p.points.length - 1; i++) {
+          const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+          line.setAttribute('x1', p.points[i].x + '%'); line.setAttribute('y1', p.points[i].y + '%');
+          line.setAttribute('x2', p.points[i+1].x + '%'); line.setAttribute('y2', p.points[i+1].y + '%');
+          line.setAttribute('stroke', p.color); line.setAttribute('stroke-width', '5');
+          line.setAttribute('stroke-linecap', 'round'); line.setAttribute('stroke-dasharray', '8 8');
+          svg.appendChild(line);
+        }
+      });
+
+      ends.forEach((pt) => {
+        const pin = document.createElement('div');
+        pin.className = 'subway-pin bouncing';
+        pin.style.left = pt.x + '%'; pin.style.top = pt.y + '%';
+        pin.innerHTML = `<svg viewBox="0 0 32 42" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:100%; filter:drop-shadow(0 3px 4px rgba(0,0,0,0.4));"><path fill="#2c3e50" d="M16,0C7.163,0,0,7.163,0,16c0,11.2,16,26,16,26s16-14.8,16-26C32,7.163,24.837,0,16,0z"/></svg><div class="pin-text" style="position:absolute;top:6px;width:100%;text-align:center;color:white;font-weight:bold;font-size:14px;">📍</div><div class="subway-pin-text" style="background:#2c3e50; z-index:200;">${pt.name}</div>`;
+        wrapper.appendChild(pin);
+      });
+
+      rings.forEach(pt => {
+        const ring = document.createElement('div');
+        ring.className = 'transfer-ring';
+        ring.style.left = pt.x + '%'; ring.style.top = pt.y + '%';
+        wrapper.appendChild(ring);
+        const pin = document.createElement('div');
+        pin.className = 'subway-pin';
+        pin.style.left = pt.x + '%'; pin.style.top = pt.y + '%';
+        pin.innerHTML = `<div class="subway-pin-text" style="background:#e74c3c; z-index:200;">${pt.name}</div>`;
+        wrapper.appendChild(pin);
+      });
+      
+      setTimeout(() => {
+         const container = document.getElementById('subway-map-container');
+         const scrollX = (wrapper.offsetWidth * (ends[0].x / 100)) - (container.offsetWidth / 2);
+         const scrollY = (wrapper.offsetHeight * (ends[0].y / 100)) - (container.offsetHeight / 2);
+         container.scrollTo({ left: scrollX, top: scrollY, behavior: 'smooth' });
+         if (window.innerWidth <= 768) {
+           const panel = document.querySelector('.itinerary-panel');
+           if (!panel.classList.contains('collapsed')) togglePanel();
+         }
+      }, 150);
+    }
+
+    function updateMap(targetId) {
+      currentMarkers.forEach(m => map.removeLayer(m));
+      currentMarkers = [];
+      if (currentPolyline) { map.removeLayer(currentPolyline); currentPolyline = null; }
+      clearSubwayPins();
+      closeBottomSheet();
+      
+      if(targetId === 'hotel-content') renderFavs();
+
+      const container = document.getElementById(targetId);
+      if (!container) return;
+
+      const eventCards = container.querySelectorAll('.event-card');
+      const latlngs = [];
+      let pointIndex = 1;
+
+      eventCards.forEach(card => {
+        const lat = parseFloat(card.getAttribute('data-lat'));
+        const lng = parseFloat(card.getAttribute('data-lng'));
+        const queryName = card.getAttribute('data-query');
+        const titleEl = card.querySelector('h4');
+        const spotName = titleEl ? titleEl.innerText : '景點';
+
+        if (!isNaN(lat) && !isNaN(lng)) {
+          const searchParam = queryName ? encodeURIComponent(queryName) : `${lat},${lng}`;
+          const gmapsUrl = `https://www.google.com/maps/search/?api=1&query=${searchParam}`;
+          card.href = "javascript:void(0);"; 
+
+          card.addEventListener('click', (e) => {
+            if (e.target.tagName.toLowerCase() === 'button') { e.preventDefault(); return; }
+            const guideText = card.querySelector('.transit-guide') ? card.querySelector('.transit-guide').innerText : "點擊上方「規劃路線」，即可開啟 Google Maps 導航前往。";
+            currentPlaceData = { title: spotName, url: gmapsUrl, img: card.querySelector('img').src, desc: guideText, lat: lat, lng: lng };
+            document.getElementById('bs-title').innerText = currentPlaceData.title;
+            document.getElementById('bs-img').src = currentPlaceData.img;
+            document.getElementById('bs-desc').innerHTML = card.querySelector('.transit-guide') ? card.querySelector('.transit-guide').innerHTML : currentPlaceData.desc;
+            document.getElementById('bs-rating-score').innerText = (Math.random() * (4.8 - 3.8) + 3.8).toFixed(1);
+            document.getElementById('bs-reviews').innerText = `(${Math.floor(Math.random() * 3000) + 200})`;
+            openBottomSheet();
+            if(targetId !== 'hotel-content' && targetId !== 'subway-content' && !isGoogleMode) { map.panTo([lat - 0.003, lng]); }
+          });
+
+          if (targetId !== 'hotel-content') {
+            const pinHtml = `<div class="pin-marker"><svg viewBox="0 0 32 42" xmlns="http://www.w3.org/2000/svg"><path fill="#ea4335" d="M16,0C7.163,0,0,7.163,0,16c0,11.2,16,26,16,26s16-14.8,16-26C32,7.163,24.837,0,16,0z"/></svg><div class="pin-text">${pointIndex}</div></div>`;
+            const customIcon = L.divIcon({ className: 'map-pin-container', html: pinHtml, iconSize: [32, 42], iconAnchor: [16, 42], popupAnchor: [0, -42] });
+            const marker = L.marker([lat, lng], { icon: customIcon }).addTo(map);
+            marker.bindPopup(`<b>${spotName}</b><br><span style="font-size:12px; color:#1a73e8;">點擊卡片查看詳細資訊</span>`);
+            marker.on('click', () => { card.click(); });
+            currentMarkers.push(marker); latlngs.push([lat, lng]);
+            card.addEventListener('mouseenter', () => { const iconElement = marker.getElement(); if (iconElement) iconElement.classList.add('bouncing'); });
+            card.addEventListener('mouseleave', () => { const iconElement = marker.getElement(); if (iconElement) iconElement.classList.remove('bouncing'); });
+            pointIndex++;
+          }
+        }
+      });
+
+      if (latlngs.length > 0 && targetId !== 'hotel-content') {
+        currentPolyline = L.polyline(latlngs, { color: '#1a73e8', weight: 4, opacity: 0.8, dashArray: '8, 8' }).addTo(map);
+        const isMobile = window.innerWidth <= 768;
+        const paddingOptions = isMobile ? { paddingTopLeft: [20, 20], paddingBottomRight: [20, window.innerHeight * 0.45] } : { padding: [60, 60] };
+        map.fitBounds(currentPolyline.getBounds(), paddingOptions);
+      }
+      attachPinButtons();
+    }
+
+    const buttons = document.querySelectorAll('.day-btn');
+    const contents = document.querySelectorAll('.day-content');
+
+    buttons.forEach(button => {
+      button.addEventListener('click', (e) => {
+        if(e.currentTarget.classList.contains('drive-btn')) return;
+
+        buttons.forEach(btn => btn.classList.remove('active'));
+        contents.forEach(content => content.classList.remove('active'));
+        button.classList.add('active');
+        
+        const targetId = button.getAttribute('data-target');
+        currentTab = targetId;
+        
+        // 切換控制按鈕顯示狀態
+        if (targetId === 'subway-content' || targetId === 'transport-content') {
+          document.getElementById('map-mode-toggle').style.display = 'none';
+          document.getElementById('search-supermarket-btn').style.display = 'none';
+          document.getElementById('quick-add-btn').style.display = 'none';
+        } else if (targetId === 'hotel-content') {
+          document.getElementById('map-mode-toggle').style.display = 'none';
+          document.getElementById('search-supermarket-btn').style.display = 'flex';
+          document.getElementById('quick-add-btn').style.display = 'flex';
+        } else {
+          document.getElementById('map-mode-toggle').style.display = 'flex';
+          document.getElementById('search-supermarket-btn').style.display = 'flex';
+          document.getElementById('quick-add-btn').style.display = 'flex';
+          
+          isGoogleMode = false;
+          const toggleBtn = document.getElementById('map-mode-toggle');
+          toggleBtn.innerHTML = '🔍 切換 Google 探索地圖';
+          toggleBtn.style.color = '#1a73e8';
+          toggleBtn.style.borderColor = '#1a73e8';
+        }
+
+        // 核心：切換地圖引擎
+        if (targetId === 'subway-content') {
+          document.getElementById('leaflet-map').style.display = 'none';
+          document.getElementById('google-iframe').style.display = 'none';
+          document.getElementById('subway-map-container').style.display = 'block';
+          document.getElementById('zoom-controls').style.display = 'flex';
+        } else if (targetId === 'hotel-content') {
+          document.getElementById('leaflet-map').style.display = 'none';
+          document.getElementById('google-iframe').style.display = 'block';
+          document.getElementById('subway-map-container').style.display = 'none';
+          document.getElementById('zoom-controls').style.display = 'none';
+          document.getElementById('google-iframe').src = "https://maps.google.com/maps?q=35.694602,139.813897(相鐵FRESA INN 東京錦糸町)&z=16&output=embed";
+        } else {
+          document.getElementById('leaflet-map').style.display = 'block';
+          document.getElementById('google-iframe').style.display = 'none';
+          document.getElementById('subway-map-container').style.display = 'none';
+          document.getElementById('zoom-controls').style.display = 'none';
+        }
+
+        document.getElementById(targetId).classList.add('active');
+        
+        // 延遲更新機制避免破圖當機
+        setTimeout(() => {
+          if (targetId !== 'subway-content' && targetId !== 'hotel-content') {
+            map.invalidateSize();
+          }
+          if (targetId !== 'subway-content') {
+            updateMap(targetId);
+          }
+        }, 150);
+        
+        if (window.innerWidth <= 768) {
+          const panel = document.querySelector('.itinerary-panel');
+          if (panel.classList.contains('collapsed')) { togglePanel(); }
+        }
+      });
+    });
+
+    setTimeout(() => { updateMap('day1-content'); renderFavs(); renderDayCustom(); }, 150);
+  </script>
+</body>
+</html>
